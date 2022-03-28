@@ -77,14 +77,31 @@ class VideoPlayer:
         self.draw_duration = value
 
     def play(self):
+        self._process_video()
+
+    def save(self, filepath: str):
+        self._process_video(filepath)
+
+    def _process_video(self, save_path: str = None):
+
         cap = cv2.VideoCapture(self.video_path)
         frame_rate = cap.get(cv2.CAP_PROP_FPS)
         frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        frame_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
         current_frame = 0
         delay = int(1000 / frame_rate)
         total_duration = int(frame_count * 1000 / frame_rate)
         current_time = 0
+
+        if save_path is not None:
+            out = cv2.VideoWriter(
+                save_path,
+                cv2.VideoWriter_fourcc(*"mp4v"),
+                frame_rate,
+                (int(frame_width), int(frame_height)),
+            )
 
         while current_frame < frame_count and cap.isOpened():
             success, frame = cap.read()
@@ -95,7 +112,15 @@ class VideoPlayer:
                 break
 
             try:
-                self._show_frame(frame, current_frame, current_time, total_duration)
+                processed_frame = self._process_frame(
+                    frame, current_frame, current_time, total_duration
+                )
+
+                if save_path is not None:
+                    out.write(processed_frame)
+                else:
+                    cv2.imshow("Video", processed_frame)
+
             except IndexError as e:
                 # Index error could happen if the video is longer than the features dataframe
                 print("Warning : The annotation are too short for the video.")
@@ -107,7 +132,7 @@ class VideoPlayer:
         cv2.destroyAllWindows()
         cap.release()
 
-    def _show_frame(self, frame, current_frame, current_time, total_duration):
+    def _process_frame(self, frame, current_frame, current_time, total_duration):
         if self.pose_features is not None:
             draw_pose_landmarks(
                 frame, self.pose_features.iloc[current_frame].values.reshape((-1, 2))
@@ -149,7 +174,7 @@ class VideoPlayer:
         if self.draw_duration:
             self._show_duration(frame, current_time, total_duration)
 
-        cv2.imshow("Video", frame)
+        return frame
 
     def _show_duration(self, frame, current_time: int, total_duration: int):
         duration_info = f"{self._duration_to_str(current_time)} / {self._duration_to_str(total_duration)}"
